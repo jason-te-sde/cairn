@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.jason-te-sde</groupId>
+    <artifactId>cairn-parent</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>cairn-testkit</artifactId>
+  <name>cairn-testkit</name>
+  <description>
+    The deterministic simulator, the invariant checker, a second implementation of the rules to
+    differ against, and the known flaws that prove the suite can go red. Shipped as main code
+    rather than test code so it can be pointed at somebody else's state machine.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.github.jason-te-sde</groupId>
+      <artifactId>cairn-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.jason-te-sde</groupId>
+      <artifactId>cairn-codec</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.jason-te-sde</groupId>
+      <artifactId>cairn-effects</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.jason-te-sde</groupId>
+      <artifactId>cairn-store</artifactId>
+    </dependency>
+  </dependencies>
+</project>
