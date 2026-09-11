@@ -26,6 +26,15 @@ mvn -B -ntp install -DskipTests -q
 mvn -B -ntp test -pl cairn-testkit -am -Dtest=SoakTest -Dcairn.sim.seeds=500 \
     -Dsurefire.failIfNoSpecifiedTests=false -q || fail "soak"
 
+step "javadoc, with doclint"
+# Not covered by `verify`: doclint lives in the javadoc plugin, which only runs under the release
+# profile. So a broken @link compiles, tests, and passes preflight, and then fails in the workflow
+# that publishes the docs — which is how {@link #load} inside a method that *returns* the object
+# owning `load` got as far as main. Cheap to run here; the whole point of this script is that a red
+# check should not be the first you hear of something.
+mvn -B -ntp install -DskipTests -q || fail "install"
+mvn -B -ntp javadoc:aggregate -Prelease -q || fail "javadoc"
+
 step "the second JDK"
 # Every JDK the CI matrix uses. A lint that exists in one and not the other is exactly the kind of
 # thing this catches.
