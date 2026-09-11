@@ -1,0 +1,14 @@
+cairn
+Copyright (c) 2026 Jason Te
+Licensed under the MIT License. See LICENSE.
+
+This product includes the following third-party software in its executable jar
+(cairn-server-*.jar). The library modules themselves bundle nothing.
+
+  SLF4J (org.slf4j:slf4j-api, org.slf4j:slf4j-simple)
+  Copyright (c) 2004-2024 QOS.ch Sarl (Switzerland)
+  Licensed under the MIT License.
+  https://www.slf4j.org/license.html
+
+Nothing else is bundled. `mvn dependency:tree` is the check, and the README's
+"runtime dependencies" row is the claim.
