@@ -39,7 +39,7 @@ jobs:
         run: mvn -B -ntp -Prelease package -DskipTests
 
       - name: attach the jar and the sources
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             cairn-server/target/cairn-server-*.jar
