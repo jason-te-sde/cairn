@@ -78,6 +78,26 @@ public final class FileCommandLog implements CommandLog {
     private long lastIndex;
     private boolean dirty;
 
+    /**
+     * The thread that touched this log first, and the only one allowed to touch it again.
+     *
+     * <p>The class javadoc has always said a single thread owns the log. Saying so did not stop
+     * {@code cairn-server} from reading {@code sizeBytes()} and the whole replay path from request
+     * threads, which produced a {@code ConcurrentModificationException} on
+     * {@code GET /v1/state} and a {@code ClosedChannelException} on {@code GET /metrics} — the
+     * owning thread was rolling and deleting segments underneath them.
+     *
+     * <p>So the contract is now checked rather than documented. A cross-thread call throws
+     * immediately, with both thread names, instead of corrupting a read once in a while. That turns
+     * the next instance of this mistake into a failure at the call site rather than a race.
+     *
+     * <p>Claimed on first <i>use</i>, not on construction, because a log is routinely built by one
+     * thread and handed to another — that is what {@code cairn-server} does. Ownership also passes
+     * when the previous owner is no longer alive, which covers an executor replacing its worker and
+     * a shutdown closing the log after its owner has gone.
+     */
+    private Thread owner;
+
     /** Opens or creates a log, recovering whatever is there. */
     public FileCommandLog(Path directory, Durability durability) {
         this(directory, durability, DEFAULT_SEGMENT_BYTES);
@@ -97,6 +117,7 @@ public final class FileCommandLog implements CommandLog {
 
     @Override
     public long append(Command command) {
+        confine();
         byte[] payload = Codec.encodeCommand(command);
         if (payload.length > MAX_RECORD_BYTES) {
             throw new StoreException(
@@ -121,6 +142,7 @@ public final class FileCommandLog implements CommandLog {
 
     @Override
     public void sync() {
+        confine();
         if (durability == Durability.NONE || !dirty || active == null) {
             dirty = false;
             return;
@@ -135,16 +157,19 @@ public final class FileCommandLog implements CommandLog {
 
     @Override
     public long lastIndex() {
+        confine();
         return lastIndex;
     }
 
     @Override
     public long firstIndex() {
+        confine();
         return segments.isEmpty() ? 1 : segments.get(0).firstIndex;
     }
 
     @Override
     public List<LogRecord> read(long fromIndex, int maxRecords) {
+        confine();
         if (fromIndex < firstIndex()) {
             throw new StoreException(
                     "index " + fromIndex + " has been discarded; the log starts at " + firstIndex());
@@ -168,6 +193,7 @@ public final class FileCommandLog implements CommandLog {
 
     @Override
     public void discardThrough(long throughIndex) {
+        confine();
         // A segment goes only if every record in it is at or below the boundary. Discarding one
         // that straddles the boundary would take records above it with it, which is precisely the
         // way log compaction loses committed data.
@@ -204,6 +230,7 @@ public final class FileCommandLog implements CommandLog {
 
     @Override
     public long sizeBytes() {
+        confine();
         long total = 0;
         for (Segment segment : segments) {
             total += segment.bytes();
@@ -219,6 +246,30 @@ public final class FileCommandLog implements CommandLog {
         }
         segments.clear();
         active = null;
+    }
+
+    /**
+     * Claims ownership on first use and refuses every other thread thereafter.
+     *
+     * <p>Not synchronization — it does not make the log thread-safe, and is not meant to. It makes
+     * the absence of thread-safety loud.
+     */
+    private void confine() {
+        Thread current = Thread.currentThread();
+        if (owner == null || !owner.isAlive()) {
+            // Ownership passes when the previous owner has terminated. A dead thread cannot be
+            // racing with anybody, and this is the case that matters in practice: an executor
+            // replacing its worker, and a shutdown that closes the log after the thread which
+            // owned it has gone.
+            owner = current;
+            return;
+        }
+        if (owner != current) {
+            throw new IllegalStateException(
+                    "a command log is owned by one thread: '" + owner.getName()
+                            + "' claimed it, '" + current.getName() + "' tried to use it. Route"
+                            + " the call through the thread that owns the log.");
+        }
     }
 
     // ---- recovery ----------------------------------------------------------------------------
@@ -261,8 +312,11 @@ public final class FileCommandLog implements CommandLog {
         active = segments.isEmpty() ? null : segments.get(segments.size() - 1);
         lastIndex = segments.isEmpty() ? 0 : active.lastIndex();
         if (!segments.isEmpty()) {
+            // The fields, not firstIndex(). The accessor is confined, and calling it here would
+            // make the constructing thread the owner — so a log built by one thread and used by
+            // another would be refused, which is the normal arrangement rather than a mistake.
             LOG.info("recovered {} log segment(s), indexes {}..{}",
-                    segments.size(), firstIndex(), lastIndex);
+                    segments.size(), segments.get(0).firstIndex, lastIndex);
         }
     }
 

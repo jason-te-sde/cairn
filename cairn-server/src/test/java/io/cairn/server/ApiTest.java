@@ -367,6 +367,56 @@ class ApiTest {
     }
 
     @Test
+    void anArtifactOverTheCeilingIsFourThirteenWithTheLimitInIt() throws Exception {
+        registry.close();
+        registry = new TestRegistry(directory.resolve("bounded"), null, null, 1024);
+
+        HttpResponse<String> refused = http.send(
+                HttpRequest.newBuilder(URI.create(registry.base() + "/v1/artifacts"))
+                        .PUT(HttpRequest.BodyPublishers.ofByteArray(new byte[4096]))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        // 413, not 409: "too big" is not a conflict a retry resolves, and the client needs the
+        // number. It came back as a generic 409 with the limit buried in prose until this test.
+        assertEquals(413, refused.statusCode(), refused.body());
+        Map<String, Object> body = Json.parseObject(refused.body());
+        assertEquals("artifact_too_large", body.get("error"));
+        assertEquals(1024L, body.get("limit_bytes"));
+
+        // And nothing was stored, so the registry never learned the upload happened.
+        assertEquals(0, registry.engine().state().blobs().size());
+    }
+
+    @Test
+    void historyBelowTheCompactedPrefixIsGoneRatherThanAConflict() throws Exception {
+        // Compaction is supposed to happen, so asking for something below it is a reasonable
+        // request with an honest "not any more" as the answer. 410, and the body names the
+        // earliest index still available so the caller does not have to bisect for it.
+        String digest = upload("weights");
+        for (int i = 0; i < 12; i++) {
+            publish("m" + i + "@1.0.0", digest);
+        }
+        registry.engine().checkpoint();
+        long floor = registry.engine().earliestReplayableIndex();
+        if (floor == 0) {
+            // A single segment cannot be released, so there is nothing compacted to ask about.
+            return;
+        }
+
+        HttpResponse<String> gone = get("/v1/state?at=1");
+        assertEquals(410, gone.statusCode(), gone.body());
+        Map<String, Object> body = Json.parseObject(gone.body());
+        assertEquals("history_unavailable", body.get("error"));
+        assertEquals(1L, body.get("requested"));
+        assertEquals(floor, body.get("earliest_available"));
+
+        // And the happy path reports the window too, so a client need not fail to discover it.
+        Map<String, Object> now = Json.parseObject(get("/v1/state").body());
+        assertEquals(floor, now.get("earliest_available"));
+    }
+
+    @Test
     void theEffectsRouteShowsWhatIsOwed() throws Exception {
         publish("fraud@1.0.0", upload("weights v1"));
         Map<String, Object> effects = Json.parseObject(get("/v1/effects").body());

@@ -96,6 +96,26 @@ final class Api implements HttpHandler {
             respondError(exchange, 422, "digest_mismatch", e.getMessage());
         } catch (NoSuchBlobException e) {
             respondError(exchange, 404, "no_such_artifact", e.getMessage());
+        } catch (io.cairn.store.ArtifactTooLargeException e) {
+            // 413, not 409. "Too big" is not a conflict a retry will resolve, and the ceiling is a
+            // number the client needs.
+            respondJson(exchange, 413, new Json.Writer()
+                    .field("error", "artifact_too_large")
+                    .field("detail", e.getMessage())
+                    .field("limit_bytes", e.limit())
+                    .done());
+        } catch (io.cairn.store.HistoryUnavailableException e) {
+            // 410, not 409. The request was reasonable and the answer is "not any more": the log
+            // below that index has been compacted. The body carries the earliest index that is
+            // still available so a caller does not have to bisect for it — and this is reachable
+            // by bad luck as well as by asking for something old, since a checkpoint can release a
+            // prefix between a client reading the current index and asking about it.
+            respondJson(exchange, 410, new Json.Writer()
+                    .field("error", "history_unavailable")
+                    .field("detail", e.getMessage())
+                    .field("requested", e.requested())
+                    .field("earliest_available", e.earliestAvailable())
+                    .done());
         } catch (StoreException e) {
             respondError(exchange, 409, "store_conflict", e.getMessage());
         } catch (RuntimeException e) {
@@ -456,6 +476,8 @@ final class Api implements HttpHandler {
         respondJson(exchange, 200, new Json.Writer()
                 .field("at", historic.appliedIndex())
                 .field("digest", Codec.stateDigestHex(historic))
+                // So a caller can see the window without having to ask for something outside it.
+                .field("earliest_available", engine.earliestReplayableIndex())
                 .raw("models", Json.array(models))
                 .done());
     }

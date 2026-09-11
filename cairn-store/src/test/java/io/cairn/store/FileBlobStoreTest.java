@@ -75,9 +75,10 @@ class FileBlobStoreTest {
     void anOversizedArtifactIsRefusedWhileStreamingRatherThanAfterwards() throws IOException {
         try (FileBlobStore store = new FileBlobStore(root, 1024)) {
             byte[] tooBig = new byte[4096];
-            StoreException refused = assertThrows(StoreException.class,
+            ArtifactTooLargeException refused = assertThrows(ArtifactTooLargeException.class,
                     () -> store.put(new ByteArrayInputStream(tooBig)));
-            assertTrue(refused.getMessage().contains("byte limit"), refused.getMessage());
+            assertEquals(1024, refused.limit());
+            assertTrue(refused.written() > 1024, refused.getMessage());
 
             try (var listing = Files.walk(root)) {
                 assertTrue(listing.filter(Files::isRegularFile).findAny().isEmpty(),

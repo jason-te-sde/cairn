@@ -67,7 +67,9 @@ has everything, and can rewrite the log.
 *who* beyond a self-declared `actor` string that nothing verifies. In front of anything real, this
 belongs behind a gateway that has an identity model.
 
-**No rate limiting.** A client with a valid token can fill the log and the disk.
+**No rate limiting.** A client with a valid token can fill the log and the disk. `--max-artifact-bytes`
+bounds a single upload — and should be set, because its default is the largest artifact the registry
+can represent rather than a number anybody chose — but nothing bounds the *number* of uploads.
 
 **The `actor` field is not authentication.** It is whatever the client said. It is recorded because
 an unverified attribution is still useful when reconstructing an incident, and it is not evidence.

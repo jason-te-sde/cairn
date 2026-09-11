@@ -49,7 +49,13 @@ public final class FileBlobStore implements BlobStore {
         this(root, Limits.MAX_ARTIFACT_BYTES);
     }
 
-    FileBlobStore(Path root, long maxBytes) {
+    /**
+     * Opens a blob store that refuses anything over {@code maxBytes}.
+     *
+     * <p>Public because a deployment needs to be able to lower it. The default is 256 GiB, which is
+     * a ceiling rather than a policy: a registry exposed to anything needs a number somebody chose.
+     */
+    public FileBlobStore(Path root, long maxBytes) {
         this.root = root;
         this.temporary = root.resolve("tmp");
         this.maxBytes = maxBytes;
@@ -94,9 +100,10 @@ public final class FileBlobStore implements BlobStore {
                     written += read;
                     if (written > maxBytes) {
                         // Enforced here rather than from a Content-Length, because a header is
-                        // something the client chose and this is something that happened.
-                        throw new StoreException(
-                                "artifact exceeds the " + maxBytes + " byte limit");
+                        // something the client chose and this is something that happened. Its own
+                        // exception type, so the HTTP layer can answer 413 with the ceiling rather
+                        // than 409 with prose.
+                        throw new ArtifactTooLargeException(written, maxBytes);
                     }
                     hashing.write(buffer, 0, read);
                 }

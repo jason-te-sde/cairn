@@ -1,5 +1,6 @@
 package io.cairn.server;
 
+import io.cairn.core.Limits;
 import io.cairn.store.Durability;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -27,6 +28,7 @@ import java.util.Properties;
  * @param snapshotEvery how many commands between snapshots, 0 to never snapshot
  * @param effectsLog a file to append delivered effects to as JSON lines, or null
  * @param dispatchEveryMillis how often to retry a stalled dispatcher
+ * @param maxArtifactBytes largest artifact an upload may store
  */
 public record ServerConfig(
         Path dataDir,
@@ -38,13 +40,14 @@ public record ServerConfig(
         Durability durability,
         int snapshotEvery,
         Path effectsLog,
-        long dispatchEveryMillis) {
+        long dispatchEveryMillis,
+        long maxArtifactBytes) {
 
     /** Defaults: a loopback bind on 9080, fsync per command, a snapshot every 1000 commands. */
     public static ServerConfig defaults(Path dataDir) {
         return new ServerConfig(
                 dataDir, "127.0.0.1", 9080, null, null, false,
-                Durability.SYNC_EACH, 1000, null, 2000);
+                Durability.SYNC_EACH, 1000, null, 2000, Limits.MAX_ARTIFACT_BYTES);
     }
 
     /**
@@ -90,7 +93,8 @@ public record ServerConfig(
 
     private static final List<String> KNOWN = List.of(
             "data-dir", "address", "port", "token", "admin-token", "insecure",
-            "durability", "snapshot-every", "effects-log", "dispatch-every-millis");
+            "durability", "snapshot-every", "effects-log", "dispatch-every-millis",
+            "max-artifact-bytes");
 
     private static ServerConfig from(Properties properties) {
         return new ServerConfig(
@@ -106,7 +110,9 @@ public record ServerConfig(
                 properties.getProperty("effects-log") == null
                         ? null
                         : Path.of(properties.getProperty("effects-log")),
-                Long.parseLong(properties.getProperty("dispatch-every-millis", "2000")));
+                Long.parseLong(properties.getProperty("dispatch-every-millis", "2000")),
+                Long.parseLong(properties.getProperty(
+                        "max-artifact-bytes", String.valueOf(Limits.MAX_ARTIFACT_BYTES))));
     }
 
     /**
@@ -133,6 +139,11 @@ public record ServerConfig(
         if (snapshotEvery < 0) {
             throw new IllegalStateException("--snapshot-every must not be negative");
         }
+        if (maxArtifactBytes < 1 || maxArtifactBytes > Limits.MAX_ARTIFACT_BYTES) {
+            throw new IllegalStateException(
+                    "--max-artifact-bytes must be between 1 and " + Limits.MAX_ARTIFACT_BYTES
+                            + ", got " + maxArtifactBytes);
+        }
     }
 
     /** The flags, for {@code --help}. */
@@ -149,6 +160,7 @@ public record ServerConfig(
         lines.add("  --snapshot-every=<n>        commands between snapshots, 0 to disable (1000)");
         lines.add("  --effects-log=<file>        append delivered effects as JSON lines");
         lines.add("  --dispatch-every-millis=<n> retry interval for a stalled dispatcher (2000)");
+        lines.add("  --max-artifact-bytes=<n>    largest artifact an upload may store (256 GiB)");
         return lines;
     }
 

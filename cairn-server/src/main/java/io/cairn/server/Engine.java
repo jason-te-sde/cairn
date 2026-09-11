@@ -85,6 +85,7 @@ public final class Engine implements Closeable {
     private final AtomicLong retries = new AtomicLong();
     private final Map<RejectionCode, AtomicLong> rejections = new ConcurrentHashMap<>();
     private volatile long lastSnapshotIndex;
+    private volatile LogFigures logFigures = new LogFigures(1, 0, 0);
 
     public Engine(ServerConfig config, CommandLog log, SnapshotStore snapshots, BlobStore blobs,
             EffectSink downstream) {
@@ -92,11 +93,6 @@ public final class Engine implements Closeable {
         this.log = log;
         this.snapshots = snapshots;
         this.blobs = blobs;
-
-        Recovery.Recovered recovered = Recovery.open(log, snapshots);
-        this.state = recovered.state();
-        this.lastSnapshotIndex = recovered.snapshotIndex();
-
         this.sink = new IdempotentSink(downstream, new io.cairn.effects.InMemoryAppliedLedger());
         this.dispatcher = new Dispatcher(this::state, sink, this::applyOnOwningThread);
         this.owner = Executors.newSingleThreadExecutor(runnable -> {
@@ -109,13 +105,36 @@ public final class Engine implements Closeable {
             thread.setDaemon(true);
             return thread;
         });
-        timer.scheduleWithFixedDelay(
-                () -> owner.execute(this::drainQuietly),
-                config.dispatchEveryMillis(), config.dispatchEveryMillis(), TimeUnit.MILLISECONDS);
 
-        LOG.info("recovered to index {} (snapshot {}, {} log record(s) replayed), state {}",
-                state.appliedIndex(), recovered.snapshotIndex(), recovered.replayed(),
-                Codec.stateFingerprint(state));
+        try {
+            // Recovery runs on the owning thread, not on whichever thread happened to construct
+            // the engine. That is not tidiness: the log claims ownership from its first use, so
+            // recovering here and appending later from another thread is the bug this ordering
+            // exists to prevent. It was a real one — see ConcurrentReadSafetyTest.
+            Recovery.Recovered recovered = onOwner(() -> Recovery.open(log, snapshots));
+            this.state = recovered.state();
+            this.lastSnapshotIndex = recovered.snapshotIndex();
+            onOwner(() -> {
+                publishLogFigures();
+                return null;
+            });
+
+            timer.scheduleWithFixedDelay(
+                    () -> owner.execute(this::drainQuietly),
+                    config.dispatchEveryMillis(), config.dispatchEveryMillis(),
+                    TimeUnit.MILLISECONDS);
+
+            LOG.info("recovered to index {} (snapshot {}, {} log record(s) replayed), state {}",
+                    state.appliedIndex(), recovered.snapshotIndex(), recovered.replayed(),
+                    Codec.stateFingerprint(state));
+        } catch (RuntimeException | Error failure) {
+            // The engine closes these in close(), so it owns them — which means it owes them a
+            // close when its own construction fails. Without this, a registry that refuses to
+            // start because its log has a hole in it leaks three file handles on the way out.
+            shutdownExecutors();
+            closeQuietly(log, snapshots, blobs);
+            throw failure;
+        }
     }
 
     /** The current state. Lock-free, and consistent as of some point in the recent past. */
@@ -176,6 +195,7 @@ public final class Engine implements Closeable {
         onOwner(() -> {
             Recovery.checkpoint(state, log, snapshots);
             lastSnapshotIndex = state.appliedIndex();
+            publishLogFigures();
             return null;
         });
     }
@@ -192,16 +212,28 @@ public final class Engine implements Closeable {
      *     snapshot covers it
      */
     public Registry replayTo(long index) {
+        // On the owning thread, because this walks the log and the log belongs to that thread.
+        // Running it on a request thread produced a ConcurrentModificationException while a
+        // checkpoint rebuilt the segment list underneath it.
+        //
+        // The cost is that a history query briefly serializes with the command path: a replay of a
+        // long log holds the owning thread for its duration. That is what a single-writer design
+        // implies, and both callers are operator commands rather than hot paths —
+        // docs/operations.md says so. The alternative, a second read-only handle on the same
+        // directory, would have to cope with a tail being appended underneath it, which is a
+        // harder problem than the one being solved.
+        return onOwner(() -> replayOnOwningThread(index));
+    }
+
+    private Registry replayOnOwningThread(long index) {
         Registry base = Registry.empty();
         Optional<Registry> snapshot = snapshots.load();
         if (snapshot.isPresent() && snapshot.get().appliedIndex() <= index) {
             base = snapshot.get();
         }
         if (base.appliedIndex() + 1 < log.firstIndex()) {
-            throw new StoreException(
-                    "cannot replay to " + index + ": the log starts at " + log.firstIndex()
-                            + " and the newest usable snapshot only reaches "
-                            + base.appliedIndex());
+            throw new io.cairn.store.HistoryUnavailableException(
+                    index, earliestReplayableOnOwningThread());
         }
         PureKernel kernel = new PureKernel(base);
         long from = base.appliedIndex() + 1;
@@ -230,12 +262,34 @@ public final class Engine implements Closeable {
      * whenever somebody asks whether the registry is what the log says it is.
      */
     public Verification verify() {
-        Registry derived = replayTo(log.lastIndex());
-        String served = Codec.stateDigestHex(state);
-        String fromLog = Codec.stateDigestHex(derived);
-        return new Verification(
-                state.appliedIndex(), derived.appliedIndex(), served, fromLog,
-                served.equals(fromLog));
+        // One hop onto the owning thread for the whole audit, rather than one per step. Doing it
+        // in pieces would compare a state captured before a command against a replay taken after
+        // it, and report a mismatch that is really just a concurrent write.
+        return onOwner(() -> {
+            Registry served = state;
+            Registry derived = replayOnOwningThread(log.lastIndex());
+            String servedDigest = Codec.stateDigestHex(served);
+            String derivedDigest = Codec.stateDigestHex(derived);
+            return new Verification(
+                    served.appliedIndex(), derived.appliedIndex(), servedDigest, derivedDigest,
+                    servedDigest.equals(derivedDigest));
+        });
+    }
+
+    /**
+     * The lowest index that can still be reconstructed. Must run on the owning thread.
+     *
+     * <p>Either the log still reaches back to the beginning, or the newest snapshot is the floor —
+     * the checkpoint ordering guarantees a snapshot exists at or above the point the log was
+     * released to, so there is nothing below it to reach.
+     */
+    private long earliestReplayableOnOwningThread() {
+        return log.firstIndex() == 1 ? 0 : lastSnapshotIndex;
+    }
+
+    /** The lowest index {@link #replayTo} can still answer for. */
+    public long earliestReplayableIndex() {
+        return onOwner(this::earliestReplayableOnOwningThread);
     }
 
     /**
@@ -254,8 +308,18 @@ public final class Engine implements Closeable {
             String derivedDigest,
             boolean agrees) {}
 
-    /** Counters for the metrics endpoint. */
+    /**
+     * Counters for the metrics endpoint. Safe from any thread.
+     *
+     * <p>The log's own figures come from {@link #logFigures}, a snapshot the owning thread
+     * republishes after every command, rather than from the log. Asking the log directly is what
+     * made {@code GET /metrics} throw {@code ClosedChannelException} while a checkpoint was
+     * deleting a segment. Reading a snapshot also means a scrape never queues behind an fsync,
+     * which is the right trade for a monitoring endpoint: the numbers are as of the last command
+     * rather than as of this instant, and they are at least consistent with each other.
+     */
     public Stats stats() {
+        LogFigures figures = logFigures;
         return new Stats(
                 applied.get(),
                 retries.get(),
@@ -265,10 +329,18 @@ public final class Engine implements Closeable {
                 sink.duplicateCount(),
                 dispatcher.failureCount(),
                 state.outboxDepth(),
-                log.firstIndex(),
-                log.lastIndex(),
-                log.sizeBytes(),
+                figures.firstIndex(),
+                figures.lastIndex(),
+                figures.bytes(),
                 lastSnapshotIndex);
+    }
+
+    /** What the log looked like after the last command. Published by the owning thread. */
+    private record LogFigures(long firstIndex, long lastIndex, long bytes) {}
+
+    /** Must run on the owning thread. */
+    private void publishLogFigures() {
+        logFigures = new LogFigures(log.firstIndex(), log.lastIndex(), log.sizeBytes());
     }
 
     /**
@@ -306,14 +378,30 @@ public final class Engine implements Closeable {
         timer.shutdownNow();
         // Drain what is owed before stopping, so a clean shutdown does not leave the outside world
         // waiting for effects the next start will have to rediscover.
+        boolean closed = false;
         try {
             onOwner(() -> {
                 drainQuietly();
+                // Closed here, on the thread that owns them, rather than after the executor has
+                // stopped. The log's own close() syncs, and a sync from another thread is exactly
+                // the cross-thread use this design is trying not to make.
+                closeQuietly(log, snapshots, blobs);
                 return null;
             });
+            closed = true;
         } catch (RuntimeException e) {
-            LOG.warn("could not drain the outbox during shutdown: {}", e.getMessage());
+            LOG.warn("could not drain and close on the kernel thread: {}", e.getMessage());
         }
+        shutdownExecutors();
+        if (!closed) {
+            // The owning thread was already gone, so nothing can be racing and ownership passes.
+            // Better to close late than to leak the handles.
+            closeQuietly(log, snapshots, blobs);
+        }
+    }
+
+    private void shutdownExecutors() {
+        timer.shutdownNow();
         owner.shutdown();
         try {
             if (!owner.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -322,9 +410,17 @@ public final class Engine implements Closeable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        log.close();
-        snapshots.close();
-        blobs.close();
+    }
+
+    private static void closeQuietly(java.io.Closeable... resources) {
+        for (java.io.Closeable resource : resources) {
+            try {
+                resource.close();
+            } catch (IOException | RuntimeException e) {
+                LOG.warn("could not close {} during a failed startup: {}",
+                        resource.getClass().getSimpleName(), e.getMessage());
+            }
+        }
     }
 
     // ---- the owning thread -------------------------------------------------------------------
@@ -341,6 +437,7 @@ public final class Engine implements Closeable {
         log.sync();
         Transition transition = Kernel.apply(state, index, command);
         state = transition.state();
+        publishLogFigures();
         switch (transition.outcome()) {
             case Outcome.Applied outcome -> {
                 if (outcome.kind() == Outcome.Applied.Kind.NEW) {
@@ -380,6 +477,7 @@ public final class Engine implements Closeable {
         try {
             Recovery.checkpoint(state, log, snapshots);
             lastSnapshotIndex = state.appliedIndex();
+            publishLogFigures();
         } catch (RuntimeException e) {
             // A failed snapshot is not a failed command. The log still holds everything, so the
             // cost is a longer replay next time.

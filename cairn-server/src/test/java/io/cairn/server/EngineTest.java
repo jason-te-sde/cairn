@@ -142,14 +142,20 @@ class EngineTest {
             ingest("weights " + i);
         }
         engine().checkpoint();
-        long releasedBelow = registry.log().firstIndex();
+        long releasedBelow = registry.logFirstIndex();
         if (releasedBelow <= 1) {
             // A single segment cannot be released; nothing to assert on this filesystem.
             return;
         }
-        StoreException refused =
-                assertThrows(StoreException.class, () -> engine().replayTo(0));
-        assertTrue(refused.getMessage().contains("cannot replay"), refused.getMessage());
+        io.cairn.store.HistoryUnavailableException gone = assertThrows(
+                io.cairn.store.HistoryUnavailableException.class, () -> engine().replayTo(0));
+        // The useful part is not the message, it is the number: a caller learns how far back
+        // history goes instead of having to bisect for it. The API returns this as 410 with the
+        // floor in the body.
+        assertEquals(0, gone.requested());
+        assertEquals(releasedBelow - 1, gone.earliestAvailable(),
+                "the floor should be the snapshot the log was released to: " + gone.getMessage());
+        assertEquals(gone.earliestAvailable(), engine().earliestReplayableIndex());
     }
 
     @Test

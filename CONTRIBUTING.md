@@ -6,7 +6,7 @@ JDK 21 or newer and Maven 3.9 or newer. Nothing else — no code generator, no n
 container runtime.
 
 ```bash
-mvn verify                     # compiles with -Werror, runs all 520 tests
+mvn verify                     # compiles with -Werror, runs all 529 tests
 ./scripts/preflight.sh         # everything CI will run, in the same order
 ```
 
