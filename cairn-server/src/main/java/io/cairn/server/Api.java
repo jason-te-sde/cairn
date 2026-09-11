@@ -428,10 +428,20 @@ final class Api implements HttpHandler {
     }
 
     private void stateAt(HttpExchange exchange) throws IOException {
-        String query = exchange.getRequestURI().getQuery();
+        // Parsed out of the whole query rather than assumed to be first, so `?foo=1&at=2` works.
+        // Long.parseLong throws NumberFormatException, which is an IllegalArgumentException, which
+        // the handler maps to 400 — the right answer for `?at=banana`.
         long at = engine.state().appliedIndex();
-        if (query != null && query.startsWith("at=")) {
-            at = Long.parseLong(query.substring(3));
+        String query = exchange.getRequestURI().getQuery();
+        if (query != null) {
+            for (String parameter : query.split("&")) {
+                if (parameter.startsWith("at=")) {
+                    at = Long.parseLong(parameter.substring(3));
+                }
+            }
+        }
+        if (at < 0) {
+            throw new IllegalArgumentException("at must not be negative: " + at);
         }
         Registry historic = engine.replayTo(at);
         List<String> models = new ArrayList<>();
