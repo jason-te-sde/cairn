@@ -187,6 +187,10 @@ behind it cannot live in the repository; [`SETUP-PUBLISHING.md`](SETUP-PUBLISHIN
 maintainer follows to supply them and [`RELEASING.md`](RELEASING.md) is the release sequence itself.
 Until then, `mvn install` puts the modules in your local repository.
 
+API documentation: **[jason-te-sde.github.io/cairn](https://jason-te-sde.github.io/cairn/)**,
+published from `main` by CI. It is built with doclint on, so a broken reference fails the build
+rather than becoming a 404 on the site.
+
 ## Architecture
 
 ```mermaid
