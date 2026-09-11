@@ -1,0 +1,15 @@
+# Everything, by default.
+*                       @jason-te-sde
+
+# The kernel and its encoding are where a mistake becomes permanent: the first decides what the
+# rules are, the second decides what is on disk forever. Both want a second pair of eyes even on a
+# change that looks obvious.
+/cairn-core/            @jason-te-sde
+/cairn-codec/           @jason-te-sde
+
+# A weakened check is indistinguishable from a passing build.
+/cairn-testkit/         @jason-te-sde
+
+# Release and publishing paths.
+/.github/workflows/     @jason-te-sde
+/pom.xml                @jason-te-sde

@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.github.jason-te-sde</groupId>
+  <artifactId>cairn-parent</artifactId>
+  <version>0.1.0</version>
+  <packaging>pom</packaging>
+
+  <name>cairn</name>
+  <description>
+    A deterministic model registry kernel: immutable versions, content-addressed artifacts,
+    exactly-once side effects through a replicated effect log, and a seeded simulator that
+    asserts every invariant after every step.
+  </description>
+  <url>https://github.com/jason-te-sde/cairn</url>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>jason-te-sde</id>
+      <name>Jason Te</name>
+      <url>https://github.com/jason-te-sde</url>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/jason-te-sde/cairn.git</connection>
+    <developerConnection>scm:git:git@github.com:jason-te-sde/cairn.git</developerConnection>
+    <url>https://github.com/jason-te-sde/cairn</url>
+    <tag>HEAD</tag>
+  </scm>
+
+  <issueManagement>
+    <system>GitHub Issues</system>
+    <url>https://github.com/jason-te-sde/cairn/issues</url>
+  </issueManagement>
+
+  <modules>
+    <module>cairn-core</module>
+    <module>cairn-codec</module>
+    <module>cairn-store</module>
+    <module>cairn-effects</module>
+    <module>cairn-testkit</module>
+    <module>cairn-server</module>
+  </modules>
+
+  <properties>
+    <!-- 21, not 25. The kernel is meant to be embedded in somebody else's process, and a library
+         that forces its callers onto the newest JDK is a library most of them cannot adopt. CI
+         compiles and tests on both 21 and 25, because a two-JDK matrix has already caught a class
+         of bug that no in-process check can see: see docs/testing.md. -->
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!-- The whole runtime dependency list. cairn-core and cairn-codec have none at all, which is
+         what keeps the kernel embeddable and the simulator honest; the modules that do I/O take
+         the SLF4J facade so an embedder routes their logs rather than inheriting a framework. -->
+    <slf4j.version>2.0.18</slf4j.version>
+    <junit.version>5.14.2</junit.version>
+
+    <compiler.plugin.version>3.15.0</compiler.plugin.version>
+    <surefire.plugin.version>3.5.6</surefire.plugin.version>
+    <jacoco.plugin.version>0.8.15</jacoco.plugin.version>
+    <enforcer.plugin.version>3.6.3</enforcer.plugin.version>
+    <shade.plugin.version>3.6.2</shade.plugin.version>
+    <source.plugin.version>3.4.0</source.plugin.version>
+    <javadoc.plugin.version>3.12.0</javadoc.plugin.version>
+    <gpg.plugin.version>3.2.8</gpg.plugin.version>
+    <central.plugin.version>0.7.0</central.plugin.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>${junit.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>${slf4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-simple</artifactId>
+        <version>${slf4j.version}</version>
+      </dependency>
+
+      <!-- Modules -->
+      <dependency>
+        <groupId>io.github.jason-te-sde</groupId>
+        <artifactId>cairn-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.jason-te-sde</groupId>
+        <artifactId>cairn-codec</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.jason-te-sde</groupId>
+        <artifactId>cairn-store</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.jason-te-sde</groupId>
+        <artifactId>cairn-effects</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.jason-te-sde</groupId>
+        <artifactId>cairn-testkit</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${compiler.plugin.version}</version>
+          <configuration>
+            <!-- No module uses an annotation processor. Saying so explicitly stops the compiler
+                 warning that nothing claimed the annotations it found on the classpath, which
+                 arrives as soon as a dependency happens to ship a processor. -->
+            <proc>none</proc>
+            <compilerArgs>
+              <!-- Warnings are build failures. Two lint categories are off on purpose: 'serial'
+                   fires on exception classes that are never serialized, and 'this-escape' fires on
+                   any constructor that calls an overridable method. -->
+              <arg>-Xlint:all,-serial,-this-escape</arg>
+              <arg>-Werror</arg>
+            </compilerArgs>
+          </configuration>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${surefire.plugin.version}</version>
+          <configuration>
+            <!-- Test classes run in parallel, methods within a class do not: several suites share
+                 a temporary directory per class. -->
+            <properties>
+              <configurationParameters>
+                junit.jupiter.execution.parallel.enabled = true
+                junit.jupiter.execution.parallel.mode.default = same_thread
+                junit.jupiter.execution.parallel.mode.classes.default = concurrent
+              </configurationParameters>
+            </properties>
+          </configuration>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>${shade.plugin.version}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>${enforcer.plugin.version}</version>
+        <executions>
+          <execution>
+            <id>enforce-environment</id>
+            <goals><goal>enforce</goal></goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion><version>[21,)</version></requireJavaVersion>
+                <requireMavenVersion><version>[3.9,)</version></requireMavenVersion>
+                <!-- A declared module that does not exist, or a version that drifts between
+                     modules, breaks a clean clone. Both are guarded here and again by the
+                     clean-clone CI job, because a multi-module build's characteristic failure is
+                     a module that is declared and never committed. -->
+                <reactorModuleConvergence/>
+                <requireUpperBoundDeps/>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!-- Artifacts a consumer needs: the jar alone is not enough to read or debug against. -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>${source.plugin.version}</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals><goal>jar-no-fork</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>${javadoc.plugin.version}</version>
+            <configuration>
+              <!-- Reject broken references and malformed HTML, but not missing tags on internals.
+                   Failing a release because a package-private helper lacks an @param would make
+                   the check something to disable rather than something to satisfy. -->
+              <doclint>all,-missing</doclint>
+              <quiet>true</quiet>
+              <detectOfflineLinks>false</detectOfflineLinks>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadoc</id>
+                <goals><goal>jar</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!-- Signing and upload. Kept apart from `release` so building the release artifacts locally
+         does not require a GPG key, and so a mistake here cannot silently skip signing. -->
+    <profile>
+      <id>publish</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>${gpg.plugin.version}</version>
+            <configuration>
+              <!-- Take the passphrase from the environment instead of prompting. Without this a
+                   signing run on a machine with no terminal does not fail, it hangs waiting for a
+                   pinentry dialog that nobody will ever see. -->
+              <gpgArguments>
+                <arg>--pinentry-mode</arg>
+                <arg>loopback</arg>
+              </gpgArguments>
+            </configuration>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals><goal>sign</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>${central.plugin.version}</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <!-- Deliberately manual: a release should be looked at in the portal before it
+                   becomes permanent, because a published version can never be replaced. -->
+              <autoPublish>false</autoPublish>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!-- Coverage runs under one JDK rather than the whole matrix: the JaCoCo agent has to
+         understand the class file version of the JDK it runs on, which makes it the first thing
+         to break on a new release. Enable with -Dcoverage. -->
+    <profile>
+      <id>coverage</id>
+      <activation>
+        <property><name>coverage</name></property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <version>${jacoco.plugin.version}</version>
+            <executions>
+              <execution>
+                <id>prepare-agent</id>
+                <goals><goal>prepare-agent</goal></goals>
+              </execution>
+              <execution>
+                <id>report</id>
+                <phase>verify</phase>
+                <goals><goal>report</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

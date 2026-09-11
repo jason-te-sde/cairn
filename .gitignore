@@ -1,0 +1,23 @@
+target/
+*.log
+*.jsonl
+.DS_Store
+
+# Runtime state. A registry's data directory is not something to commit, and the default name is
+# the one the README uses, so it is the one somebody will create by accident.
+cairn-data/
+/data/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+
+# Local overrides, which must never be committed: the whole point of them is that they hold a token.
+cairn-local.properties
+.env
