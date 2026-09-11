@@ -11,7 +11,7 @@
     <img alt="CI" src="https://github.com/jason-te-sde/cairn/actions/workflows/ci.yml/badge.svg">
   </a>
   <img alt="Java 21" src="https://img.shields.io/badge/Java-21%2B-orange">
-  <img alt="tests" src="https://img.shields.io/badge/tests-513-brightgreen">
+  <img alt="tests" src="https://img.shields.io/badge/tests-528-brightgreen">
   <img alt="coverage" src="https://img.shields.io/badge/coverage-87.0%25-brightgreen">
   <img alt="dependencies" src="https://img.shields.io/badge/runtime%20deps-1-brightgreen">
   <img alt="Maven Central" src="https://img.shields.io/badge/maven--central-pending-lightgrey">
@@ -326,9 +326,9 @@ Measured on an Apple M-series laptop, APFS, JDK 25. Every figure has the command
 
 | | |
 | --- | --- |
-| Tests | **513** (505 on every build; 8 benchmarks off by default) |
-| Line / branch coverage | **87.0% / 79.9%** |
-| Hand-written Java | 10,848 lines main, 6,239 lines test, 108 files |
+| Tests | **528** (520 on every build; 8 benchmarks off by default) |
+| Line / branch coverage | **87.0% / 80.0%** |
+| Hand-written Java | 10,870 lines main, 6,302 lines test, 109 files |
 | Runtime dependencies | **SLF4J.** `cairn-core` and `cairn-codec` have none at all |
 | Kernel throughput | **2,400,678 commands/s** |
 | Simulation | 14,402 steps/s, **113,685 invariant checks/s** |
@@ -482,6 +482,16 @@ in the number of records.</td>
 <td>A benchmark — which then showed the <i>remaining</i> cost was not in the log at all, but in the
 kernel's per-model map copy. That is now measured as a curve and documented as a limit rather than
 being quietly absorbed into a recovery number.</td>
+</tr>
+<tr>
+<td><b>The jar dispatched <code>cairnctl --url=... status</code> to the server.</b> One jar is two
+programs, and the rule for which was "is the FIRST argument a bare word". The client's own help
+documents <code>--url=&lt;base&gt;</code> as a flag, so the natural invocation went to the server,
+which refused <code>--url</code> as an unknown flag. The rule is now "is there a bare word
+anywhere", which is unambiguous because no server flag is one.</td>
+<td>The first CI run after the repository was pushed — two jobs independently, <code>clean
+clone</code> and <code>container works</code>, because they were the only things that ran the client
+with a leading flag. Nothing had tested the dispatch at all; it has fifteen cases now.</td>
 </tr>
 <tr>
 <td><b>A documented command did not work.</b> <code>mvn test -pl cairn-testkit -Dtest=SoakTest</code>
