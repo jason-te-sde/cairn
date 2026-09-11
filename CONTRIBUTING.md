@@ -11,7 +11,9 @@ mvn verify                     # compiles with -Werror, runs all 520 tests
 ```
 
 `preflight.sh` is the one to run before pushing. It includes the second JDK, which has already
-caught a class of bug that no in-process check can see.
+caught a class of bug that no in-process check can see, and a javadoc build with doclint, which
+`verify` does not do — doclint lives in the javadoc plugin and only runs under the release profile,
+so a broken `@link` otherwise gets all the way to the workflow that publishes the docs.
 
 ## Where a change goes
 

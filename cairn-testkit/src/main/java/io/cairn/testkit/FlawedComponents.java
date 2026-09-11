@@ -30,9 +30,9 @@ public final class FlawedComponents {
      *
      * <p>The inherited defect, reproduced by its observable consequence. The original closed its
      * live RocksDB and reopened it on the checkpoint directory, so everything written after a
-     * restore went into the snapshot and vanished at the next one. Here: once {@link #load} has
-     * been called, the next {@link #save} writes the state that was loaded rather than the state it
-     * was given. A second restart then comes back to where the first one did, and every command in
+     * restore went into the snapshot and vanished at the next one. Here: once
+     * {@link SnapshotStore#load} has been called, the next {@link SnapshotStore#save} writes the
+     * state that was loaded rather than the state it was given. A second restart then comes back to where the first one did, and every command in
      * between is gone.
      */
     public static SnapshotStore snapshotStoreThatAliasesLiveState(SnapshotStore delegate) {
