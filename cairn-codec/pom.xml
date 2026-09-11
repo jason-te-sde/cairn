@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.jason-te-sde</groupId>
+    <artifactId>cairn-parent</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>cairn-codec</artifactId>
+  <name>cairn-codec</name>
+  <description>
+    Canonical binary encoding for commands, effects and state. One state has exactly one valid
+    encoding, so a SHA-256 over the bytes is a usable identity for a replica.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.github.jason-te-sde</groupId>
+      <artifactId>cairn-core</artifactId>
+    </dependency>
+  </dependencies>
+</project>
