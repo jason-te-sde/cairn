@@ -376,7 +376,7 @@ is worth more than a hidden one.
 
 ## How it is tested
 
-Five layers, each covering what the cheaper one below it cannot.
+Six layers, each covering what the cheaper one below it cannot.
 
 | Layer | Covers |
 | --- | --- |
@@ -385,6 +385,7 @@ Five layers, each covering what the cheaper one below it cannot.
 | **Differential** | two implementations of one contract, required to agree after every command |
 | **Simulation** | a whole registry from one seed, twelve invariants after every step |
 | **Integration** | real sockets, real files, real `kill -9` |
+| **Concurrency** | request threads on every read path while the owning thread writes |
 
 The twelve invariants cover convergence, version immutability, reference integrity, collection
 safety, stage exclusivity, effect-log integrity, exactly-once delivery, monotonicity, lineage
@@ -482,6 +483,18 @@ in the number of records.</td>
 <td>A benchmark — which then showed the <i>remaining</i> cost was not in the log at all, but in the
 kernel's per-model map copy. That is now measured as a curve and documented as a limit rather than
 being quietly absorbed into a recovery number.</td>
+</tr>
+<tr>
+<td><b>Two read endpoints raced the thread that owns the log.</b> <code>GET /metrics</code> asked
+the log for its size and threw <code>ClosedChannelException</code> when a checkpoint closed a
+segment underneath it; <code>GET /v1/state</code> ran the entire replay path off-thread and threw
+<code>ConcurrentModificationException</code> when the segment list was rebuilt. The log's javadoc
+had said "a single thread owns the append path" since the first commit.</td>
+<td>A concurrency test written to look for exactly this, after noticing <code>Engine.stats()</code>
+was reachable from request threads. Saying a class is single-threaded turned out to be worth
+nothing, so <code>FileCommandLog</code> now claims ownership on first use and refuses other threads
+by name — which immediately caught a third instance, the engine recovering on one thread and
+appending on another.</td>
 </tr>
 <tr>
 <td><b>The jar dispatched <code>cairnctl --url=... status</code> to the server.</b> One jar is two
