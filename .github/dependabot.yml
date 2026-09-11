@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # The runtime dependency list is one entry long, so a weekly sweep is not noisy. Grouping the
+    # two SLF4J artifacts matters: the binding pins the API it was built against, and bumping one
+    # without the other fails requireUpperBoundDeps rather than failing at runtime — which is the
+    # good outcome, but a red build on a dependency bot's pull request is still wasted time.
+    groups:
+      slf4j:
+        patterns: ["org.slf4j:*"]
+      maven-plugins:
+        patterns: ["org.apache.maven.plugins:*", "org.jacoco:*", "org.sonatype.central:*"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly

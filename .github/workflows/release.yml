@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: release ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # The whole suite, not a subset. A tag that has not been through the tests is a tag somebody
+      # will install.
+      - name: verify
+        run: mvn -B -ntp verify
+
+      - name: the version in the pom must match the tag
+        run: |
+          set -euo pipefail
+          pom=$(mvn -B -ntp -q help:evaluate -Dexpression=project.version -DforceStdout)
+          tag="${GITHUB_REF_NAME#v}"
+          echo "pom=$pom tag=$tag"
+          # Otherwise the artifact attached to v0.2.0 is 0.1.0, which is the kind of mistake that
+          # is only discovered by whoever downloads it.
+          test "$pom" = "$tag"
+
+      - name: build the release artifacts
+        run: mvn -B -ntp -Prelease package -DskipTests
+
+      - name: attach the jar and the sources
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            cairn-server/target/cairn-server-*.jar
+            cairn-*/target/*-sources.jar
+          generate_release_notes: true
+          fail_on_unmatched_files: true

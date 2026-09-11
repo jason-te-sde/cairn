@@ -1,0 +1,51 @@
+name: Publish
+
+# Manual, and separate from the release. Signing and uploading needs credentials that cannot live
+# in the repository, and a published version can never be replaced — so this is a thing somebody
+# does on purpose, having looked at the artifacts the release workflow attached.
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Build and sign without uploading'
+        required: false
+        default: 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: publish to Maven Central
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: maven-central
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          server-id: central
+          server-username: CENTRAL_USERNAME
+          server-password: CENTRAL_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: GPG_PASSPHRASE
+
+      - name: verify
+        run: mvn -B -ntp verify
+
+      - name: sign and stage
+        if: github.event.inputs.dry-run == 'true'
+        run: mvn -B -ntp -Prelease,publish verify -DskipTests
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: sign and upload
+        if: github.event.inputs.dry-run != 'true'
+        run: mvn -B -ntp -Prelease,publish deploy -DskipTests
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
