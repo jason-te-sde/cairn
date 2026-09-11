@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.jason-te-sde</groupId>
+    <artifactId>cairn-parent</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>cairn-effects</artifactId>
+  <name>cairn-effects</name>
+  <description>
+    The outbox dispatcher: delivers each committed effect to the outside world at least once, and
+    a durable watermark that makes the consumer apply it at most once.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.github.jason-te-sde</groupId>
+      <artifactId>cairn-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.jason-te-sde</groupId>
+      <artifactId>cairn-codec</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+  </dependencies>
+</project>
