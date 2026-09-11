@@ -1,0 +1,45 @@
+# A registry, and a client container to talk to it.
+#
+#   docker compose up -d --wait
+#   docker compose run --rm cairnctl status
+#
+# The registry binds 0.0.0.0 inside the container, which the server refuses to do without a token
+# unless told to. The token here is a literal in a file, which is fine for a demo and is exactly
+# what SECURITY.md says not to do anywhere else.
+
+services:
+  cairn:
+    build: .
+    container_name: cairn
+    command:
+      - --data-dir=/var/lib/cairn
+      - --address=0.0.0.0
+      - --port=9080
+      - --token=demo-token
+      - --admin-token=demo-admin-token
+      - --effects-log=/var/lib/cairn/effects.jsonl
+      - --snapshot-every=500
+    ports:
+      - "9080:9080"
+    volumes:
+      - cairn-data:/var/lib/cairn
+    restart: unless-stopped
+
+  # A one-shot client. `docker compose run --rm cairnctl <command>` runs a command against the
+  # registry above; the entrypoint is the same jar, which is why the client cannot drift from the
+  # server it is talking to.
+  cairnctl:
+    build: .
+    profiles: ["cli"]
+    depends_on:
+      cairn:
+        condition: service_healthy
+    environment:
+      CAIRN_URL: http://cairn:9080
+      CAIRN_TOKEN: demo-token
+      CAIRN_ADMIN_TOKEN: demo-admin-token
+    entrypoint: ["java", "-jar", "/opt/cairn/cairn.jar"]
+    command: ["status"]
+
+volumes:
+  cairn-data:

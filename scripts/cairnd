@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# The server. One jar, so the client is always the same build as the server.
+set -euo pipefail
+jar="$(dirname "$0")/../cairn-server/target/cairn-server-0.1.0.jar"
+[ -f "$jar" ] || { echo "build it first: mvn package -DskipTests" >&2; exit 1; }
+exec java -jar "$jar" "$@"

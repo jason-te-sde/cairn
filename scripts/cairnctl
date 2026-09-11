@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# The client. Same jar; a bare subcommand goes to the CLI rather than starting a server.
+set -euo pipefail
+jar="$(dirname "$0")/../cairn-server/target/cairn-server-0.1.0.jar"
+[ -f "$jar" ] || { echo "build it first: mvn package -DskipTests" >&2; exit 1; }
+exec java -jar "$jar" "$@"
