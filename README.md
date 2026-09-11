@@ -69,10 +69,6 @@ docker compose up -d --wait
 docker compose run --rm cairnctl status
 ```
 
-Those two lines are the only thing in this README that has not been run. The Docker registry is
-unreachable from the machine this was written on, and the CI job that exercises the image has not run
-because the repository has not been pushed. Everything below was executed.
-
 Without containers:
 
 ```bash
@@ -310,7 +306,7 @@ And the parts that are about being run rather than about correctness:
 | Secure by default | a non-loopback bind without a token is refused unless `--insecure` |
 | Prometheus metrics | including `cairn_outbox_depth`, the number that reveals a registry drifting away from the world while every other metric looks fine |
 | `/healthz` and `/readyz` | which answer different questions |
-| A container image | with a CI job that builds it and drives a real publish, a refused republish and a `SIGKILL` restart through it — **the one thing here that has not been run**; see [`docs/testing.md`](docs/testing.md) |
+| A container image | built by CI, then driven through a real publish, a promote, a read-back, a refused republish, and a `SIGKILL` restart that has to come back with the same state digest |
 | An effect log | delivered effects as JSON lines with their sequence numbers — a queue any consumer can tail and deduplicate against |
 | `fsck` | reports orphaned artifacts and **deletes nothing**, because a sweep that deleted whatever it could not find a reference for would race every upload in flight |
 
