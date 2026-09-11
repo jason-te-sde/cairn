@@ -48,7 +48,8 @@ First release. On-disk format version **1**.
 - `cairnctl verify` re-derives the whole state from the log and compares it by canonical digest.
 - `cairnctl state --at=N` reconstructs the registry as it was at any log index, using the same code
   path recovery uses.
-- A container image and a compose stack, both exercised by CI.
+- A container image and a compose stack, both built and exercised by CI: a real publish, a promote,
+  a read-back, a refused republish, and a `SIGKILL` restart that must return the same state digest.
 
 ### Testing
 
