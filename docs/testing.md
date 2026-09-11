@@ -217,7 +217,11 @@ Stated because a testing document that only lists strengths is marketing.
   README says so; there is no measurement of where it stops coping.
 - **No fuzzing beyond the structured corpus.** The codec gets every bit flip of a real snapshot and a
   hand-built rejection corpus; it does not get a coverage-guided fuzzer.
-- **The container path is exercised by CI, and has never run on the author's machine.** Docker
-  Desktop here blocks on a privileged-authorisation dialog that cannot be answered
-  non-interactively. The compose stack and the Dockerfile are written and checked by the `container`
-  job in CI; they have not been run locally, and this sentence is here rather than absent.
+- **The container path has never been executed anywhere.** The `container` job in `ci.yml` builds
+  the image and drives a real registry through publish, promote, read-back, a refused republish and
+  a `SIGKILL` restart — but that job has not run, because the repository has not been pushed. It was
+  attempted locally and could not be: the Docker daemon starts, and the registry is unreachable from
+  this machine — `docker pull alpine:3` hangs indefinitely, so the base images cannot be fetched.
+
+  So the Dockerfile and the compose file are **written and unverified**. Everything else in this
+  document was run, and this is the one place where the project asserts rather than measures.
