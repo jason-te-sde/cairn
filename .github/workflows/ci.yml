@@ -45,7 +45,7 @@ jobs:
       # so diagnosing a red run means downloading the raw log and grepping it.
       - name: test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: surefire-jdk${{ matrix.java }}
           path: '**/target/surefire-reports/**'
@@ -75,7 +75,7 @@ jobs:
           find . -name jacoco.csv | xargs awk -F, 'FNR>1 {mi+=$4; ci+=$5; mb+=$6; cb+=$7} END {
             printf "\nALL: %.1f%% lines, %.1f%% branches\n", 100*ci/(mi+ci), 100*cb/(mb+cb)
           }'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: jacoco
           path: '**/target/site/jacoco/**'
@@ -102,7 +102,7 @@ jobs:
               -Dsurefire.failIfNoSpecifiedTests=false
       - name: test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: surefire-soak
           path: '**/target/surefire-reports/**'

@@ -43,7 +43,7 @@ jobs:
       # and a note that something went wrong overnight.
       - name: test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: surefire-nightly
           path: '**/target/surefire-reports/**'
@@ -69,7 +69,7 @@ jobs:
           mvn -B -ntp test -Dcairn.bench=true \
               -Dtest='LogThroughputTest,ThroughputTest,KernelScalingTest' \
               -Dsurefire.failIfNoSpecifiedTests=false | tee bench.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: benchmarks
           path: bench.txt
