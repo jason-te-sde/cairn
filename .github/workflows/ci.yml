@@ -1,0 +1,228 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (jdk ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    # The whole job takes about a minute. Anything approaching this is hung, and the six hour
+    # default means a hung job holds a runner for an afternoon before anyone notices.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 21 because that is what the modules are compiled for; 25 because a lint that exists in
+        # one JDK and not the other is a real class of failure, and because a HashMap whose
+        # iteration order the JDK randomizes per JVM is invisible to any single-JVM check.
+        java: ['21', '25']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      # Compiles with -Werror, runs every test, and enforces that each declared module exists and
+      # that dependency versions converge across modules.
+      - name: verify
+        run: mvn -B -ntp verify
+
+      # Surefire already writes the failing assertion and its stack trace to disk. Without this
+      # they are deleted when the job ends, and the summary says only that Maven exited non-zero,
+      # so diagnosing a red run means downloading the raw log and grepping it.
+      - name: test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-jdk${{ matrix.java }}
+          path: '**/target/surefire-reports/**'
+          retention-days: 7
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # One JDK rather than the matrix: the JaCoCo agent has to understand the class file version
+      # of the JDK it runs on, which makes it the first thing to break on a new release.
+      - run: mvn -B -ntp verify -Dcoverage
+      - name: summary
+        run: |
+          for f in $(find . -name jacoco.csv); do
+            awk -F, -v f="$f" 'NR>1 {mi+=$4; ci+=$5} END {
+              if (mi+ci > 0) printf "%-50s %6.1f%% lines\n", f, 100*ci/(mi+ci)
+            }' "$f"
+          done
+          find . -name jacoco.csv | xargs awk -F, 'FNR>1 {mi+=$4; ci+=$5; mb+=$6; cb+=$7} END {
+            printf "\nALL: %.1f%% lines, %.1f%% branches\n", 100*ci/(mi+ci), 100*cb/(mb+cb)
+          }'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jacoco
+          path: '**/target/site/jacoco/**'
+          retention-days: 7
+
+  soak:
+    name: soak (wider than the suite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: mvn -B -ntp install -DskipTests -q
+      # Every commit gets a sweep several times wider than the one in the suite. The nightly job
+      # goes wider still; this one exists so that a change which breaks an unusual interleaving
+      # fails on its own pull request rather than at three the next morning.
+      - name: 300 seeds
+        run: |
+          mvn -B -ntp test -pl cairn-testkit -am -Dtest=SoakTest -Dcairn.sim.seeds=300 \
+              -Dsurefire.failIfNoSpecifiedTests=false
+      - name: test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-soak
+          path: '**/target/surefire-reports/**'
+          retention-days: 7
+
+  # The container story is claimed in the README and the operations guide, so it is checked rather
+  # than asserted. This job builds the image and drives a real registry through it, because a
+  # Dockerfile that has never been built is documentation of an intention.
+  container:
+    name: container works
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Cached across runs because the first stage resolves the whole Maven dependency tree.
+      - name: build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          tags: cairn:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # --wait blocks until the service reports healthy, which is the Dockerfile's own /readyz
+      # check. If the registry cannot serve a read, this fails here instead of in the next step.
+      - name: bring it up
+        run: docker compose up -d --wait
+
+      - name: publish, promote and read back through the container
+        run: |
+          set -euo pipefail
+          run() { docker compose run --rm -T cairnctl "$@"; }
+
+          echo "the weights" > weights.bin
+          docker compose cp weights.bin cairn:/tmp/weights.bin
+          digest=$(docker compose exec -T cairn java -jar /opt/cairn/cairn.jar \
+              --url=http://127.0.0.1:9080 --token=demo-token put /tmp/weights.bin \
+              | awk '{print $1}')
+          echo "digest: $digest"
+
+          run publish fraud@1.0.0 "$digest" --label=owner=risk
+          run stage fraud@1.0.0 production
+          test "$(run production fraud | head -1 | tr -d '\r')" = "fraud@1.0.0"
+
+          # Immutability across a container boundary, which is the claim worth checking here:
+          # everything else could be a client-side illusion.
+          echo "different weights" > other.bin
+          docker compose cp other.bin cairn:/tmp/other.bin
+          other=$(docker compose exec -T cairn java -jar /opt/cairn/cairn.jar \
+              --url=http://127.0.0.1:9080 --token=demo-token put /tmp/other.bin \
+              | awk '{print $1}')
+          if run publish fraud@1.0.0 "$other"; then
+            echo "a republish with different content was accepted" >&2
+            exit 1
+          fi
+
+      - name: metrics are scrapeable without the token that can publish
+        run: |
+          curl -sf http://127.0.0.1:9080/metrics | grep -q 'cairn_outbox_depth'
+          curl -sf http://127.0.0.1:9080/readyz
+
+      - name: restart it and require the state to come back identical
+        run: |
+          set -euo pipefail
+          run() { docker compose run --rm -T cairnctl "$@"; }
+          before=$(curl -sf http://127.0.0.1:9080/readyz)
+          docker compose kill -s SIGKILL cairn
+          docker compose up -d --wait cairn
+          after=$(curl -sf http://127.0.0.1:9080/readyz)
+          echo "before: $before"
+          echo "after:  $after"
+          test "$before" = "$after"
+          run verify
+
+      # Always, not only on failure: when this job goes red the first question is whether the
+      # container was even running, and the answer should not require re-running it.
+      - name: container state
+        if: always()
+        run: |
+          docker compose ps
+          echo "--- health ---"
+          docker inspect --format '{{json .State.Health}}' cairn 2>/dev/null | head -c 600 || true
+          echo
+          echo "--- logs ---"
+          docker compose logs --no-color --tail=120
+
+      - name: tear down
+        if: always()
+        run: docker compose down -v
+
+  # A clean clone must build with nothing but a JDK and Maven. A multi-module build's
+  # characteristic failure is a module that is declared and never committed, and the enforcer's
+  # reactorModuleConvergence rule does not catch a module whose directory is missing from the
+  # commit — only a build with no local repository does.
+  clean-clone:
+    name: clean clone builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: build without a warm cache
+        run: mvn -B -ntp -Dmaven.repo.local=/tmp/fresh-repo package -DskipTests
+      - name: and the jar it produced actually starts
+        run: |
+          set -euo pipefail
+          java -jar cairn-server/target/cairn-server-0.1.0.jar \
+              --data-dir=/tmp/cairn-smoke --port=9081 &
+          for _ in $(seq 1 40); do
+            curl -sf http://127.0.0.1:9081/healthz >/dev/null && break
+            sleep 0.25
+          done
+          curl -sf http://127.0.0.1:9081/readyz
+          java -jar cairn-server/target/cairn-server-0.1.0.jar --url=http://127.0.0.1:9081 status

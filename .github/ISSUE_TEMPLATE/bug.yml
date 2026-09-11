@@ -1,0 +1,49 @@
+name: Bug
+description: Something behaves differently from what it says it does
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a simulation found it, the seed is the only thing this needs. A run is a function of its
+        seed, so `-Dcairn.sim.seeds=` plus the number reproduces it exactly.
+
+  - type: input
+    id: seed
+    attributes:
+      label: Seed, if a simulation found it
+      description: The number from the failure message, e.g. `violated at step 205 (seed 2)`
+      placeholder: "8123"
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The failing assertion or the wrong behaviour, and what you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Commands, or a test. A failing test is worth more than a description of one.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: A release, or a commit
+    validations:
+      required: true
+
+  - type: input
+    id: jdk
+    attributes:
+      label: JDK
+      description: "`java -version`. A bug that appears on one JDK and not another is a real kind."
+    validations:
+      required: true
