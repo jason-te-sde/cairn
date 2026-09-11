@@ -66,7 +66,7 @@
     <!-- The whole runtime dependency list. cairn-core and cairn-codec have none at all, which is
          what keeps the kernel embeddable and the simulator honest; the modules that do I/O take
          the SLF4J facade so an embedder routes their logs rather than inheriting a framework. -->
-    <slf4j.version>2.0.18</slf4j.version>
+    <slf4j.version>2.0.19</slf4j.version>
     <junit.version>5.14.2</junit.version>
 
     <compiler.plugin.version>3.15.0</compiler.plugin.version>
