@@ -69,7 +69,11 @@ docker compose up -d --wait
 docker compose run --rm cairnctl status
 ```
 
-or without containers:
+Those two lines are the only thing in this README that has not been run. The Docker registry is
+unreachable from the machine this was written on, and the CI job that exercises the image has not run
+because the repository has not been pushed. Everything below was executed.
+
+Without containers:
 
 ```bash
 mvn package -DskipTests
@@ -132,7 +136,11 @@ ok  served index 16 digest 030d4e28d7a4
 
 That last pair is the point of the whole design. `verify` re-derives the entire registry from the
 log and compares it to what is being served, by canonical digest — and after a `kill -9`, with no
-clean shutdown, the digest is the same twelve hex characters.
+clean shutdown, it is the same twelve hex characters.
+
+Run the script yourself and you will get a *different* digest, because a publish records the wall
+clock it was given and that is part of the state. What reproduces is not the number: it is that the
+two numbers are equal, before and after the crash.
 
 ```console
 $ cairnctl state --at=6                     # the registry as it was six commands ago
@@ -302,7 +310,7 @@ And the parts that are about being run rather than about correctness:
 | Secure by default | a non-loopback bind without a token is refused unless `--insecure` |
 | Prometheus metrics | including `cairn_outbox_depth`, the number that reveals a registry drifting away from the world while every other metric looks fine |
 | `/healthz` and `/readyz` | which answer different questions |
-| A container image | built and exercised by CI, not just committed |
+| A container image | with a CI job that builds it and drives a real publish, a refused republish and a `SIGKILL` restart through it — **the one thing here that has not been run**; see [`docs/testing.md`](docs/testing.md) |
 | An effect log | delivered effects as JSON lines with their sequence numbers — a queue any consumer can tail and deduplicate against |
 | `fsck` | reports orphaned artifacts and **deletes nothing**, because a sweep that deleted whatever it could not find a reference for would race every upload in flight |
 

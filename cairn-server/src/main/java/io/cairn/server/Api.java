@@ -50,7 +50,8 @@ import org.slf4j.LoggerFactory;
  * GET    /v1/effects                                what is owed downstream
  * GET    /v1/verify                                 re-derive from the log and compare
  * GET    /v1/state?at=N                             the registry as it was at a log index
- * GET    /healthz  /readyz  /metrics
+ * GET    /v1/fsck                                   artifacts with no live reference (admin)
+ * GET    /healthz  /readyz  /metrics                no token required
  * </pre>
  *
  * <p>Two things about the design are worth reading rather than guessing at.

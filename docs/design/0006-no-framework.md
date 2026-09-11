@@ -5,7 +5,8 @@ written for this API. The entire runtime dependency list for the project is SLF4
 
 ## Why
 
-**The API is small.** Fourteen routes and about fifteen fields. A framework's value is in what it
+**The API is small.** Fourteen routes under `/v1`, three more that need no token, and about
+fifteen request fields between them. A framework's value is in what it
 does for a surface much larger than that: content negotiation, validation annotations, dependency
 injection, filters. None of it is load-bearing here, and all of it would be on the compile path.
 

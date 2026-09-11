@@ -69,17 +69,48 @@
                     implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>io.cairn.server.Main</mainClass>
                 </transformer>
+                <!-- So the executable jar carries its own licence and the licence of the one thing
+                     it bundles. A fat jar that ships somebody else's code without their licence is
+                     a licence violation, however small the dependency list is. -->
+                <transformer
+                    implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                  <resource>META-INF/LICENSE</resource>
+                  <file>${project.basedir}/../LICENSE</file>
+                </transformer>
+                <transformer
+                    implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                  <resource>META-INF/NOTICE</resource>
+                  <file>${project.basedir}/../NOTICE</file>
+                </transformer>
               </transformers>
               <filters>
                 <filter>
-                  <!-- Signature files from a dependency describe that dependency's jar, not the
-                       shaded one, so leaving them in produces a jar the JVM refuses to verify. -->
                   <artifact>*:*</artifact>
                   <excludes>
+                    <!-- Signature files from a dependency describe that dependency's jar, not the
+                         shaded one, so leaving them in produces a jar the JVM refuses to verify. -->
                     <exclude>META-INF/*.SF</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
+
+                    <!-- Every jar has a manifest and the transformer above writes the real one, so
+                         the rest are an overlap that the plugin warns about on every build. A build
+                         with a standing warning is a build nobody reads the warnings of. -->
+                    <exclude>META-INF/MANIFEST.MF</exclude>
+
+                    <!-- Both forms. A multi-release jar puts its descriptor under
+                         META-INF/versions/<n>/, which the unqualified pattern does not match —
+                         which is why the warning survived the first attempt at silencing it. A
+                         shaded jar is not a module either way. -->
                     <exclude>module-info.class</exclude>
+                    <exclude>META-INF/versions/*/module-info.class</exclude>
+
+                    <!-- Attribution for what is bundled lives in NOTICE, which is included below.
+                         Merging several dependencies' LICENSE files into one path would keep
+                         whichever happened to be last, which is worse than saying it explicitly. -->
+                    <exclude>META-INF/LICENSE*</exclude>
+                    <exclude>META-INF/NOTICE*</exclude>
+                    <exclude>META-INF/DEPENDENCIES</exclude>
                   </excludes>
                 </filter>
               </filters>
