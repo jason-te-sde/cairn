@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.jason-te-sde</groupId>
+    <artifactId>cairn-parent</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>cairn-core</artifactId>
+  <name>cairn-core</name>
+  <description>
+    The registry kernel: one pure function from state and a command to a new state, an outcome,
+    and a list of effects. No threads, no clock, no I/O, no randomness, and no dependencies.
+  </description>
+
+  <!-- The empty dependency list is load-bearing, not an accident. A kernel that cannot reach a
+       disk or a clock even by accident is a kernel a simulator can replay from a seed, and the
+       only way to keep that true over time is for the compile path to make it impossible. The one
+       test-scope entry comes from the parent. -->
+</project>
