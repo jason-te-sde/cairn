@@ -52,7 +52,7 @@ First release. On-disk format version **1**.
 
 ### Testing
 
-- 513 tests, 505 on every build. 87.0% line and 79.9% branch coverage.
+- 528 tests, 520 on every build. 87.0% line and 80.0% branch coverage.
 - Twelve invariants, checked after every step of a seeded simulation.
 - Eight known defects reintroducible on purpose — five of them inherited from the system this
   project is derived from — with the check that catches each one asserted rather than documented.

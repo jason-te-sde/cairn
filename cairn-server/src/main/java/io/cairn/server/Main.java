@@ -31,18 +31,40 @@ public final class Main {
     private Main() {}
 
     /**
-     * Dispatches: a flag-only invocation starts the server, anything else is a client command.
+     * Dispatches: a flag-only invocation starts the server, anything with a bare word is a client
+     * command.
      *
      * <p>One jar, two programs. {@code scripts/cairnd} and {@code scripts/cairnctl} are one-line
      * wrappers, which keeps the container image to a single artifact and means the client is always
      * the same version as the server it was built with.
+     *
+     * <p>The rule is "is there a bare word anywhere", not "is the first argument a bare word",
+     * which is the version this shipped with and which was wrong. The client's own help documents
+     * {@code --url=<base>} as a flag, so {@code cairnctl --url=http://host:9080 status} is the
+     * natural invocation — and under the first-argument rule it went to the server, which then
+     * refused {@code --url} as an unknown flag. Caught by the clean-clone CI job, which was the only
+     * thing that ran the client that way.
+     *
+     * <p>Unambiguous in both directions: every server flag is {@code --name=value} or
+     * {@code --insecure}, so a server invocation never contains a bare word, and every client
+     * invocation starts with a subcommand.
      */
     public static void main(String[] args) throws IOException {
-        if (args.length > 0 && !args[0].startsWith("-")) {
+        if (looksLikeAClientCommand(args)) {
             Cli.main(args);
             return;
         }
         serve(args);
+    }
+
+    /** Whether any argument is a bare word rather than a flag. */
+    static boolean looksLikeAClientCommand(String[] args) {
+        for (String arg : args) {
+            if (!arg.startsWith("-")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void serve(String[] args) throws IOException {
