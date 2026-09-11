@@ -29,6 +29,17 @@ final class Cli {
     private static final int USAGE = 2;
     private static final int UNREACHABLE = 3;
 
+    /**
+     * How long to wait for a whole response, not just for the connection.
+     *
+     * <p>Connect timeouts are the easy half. A registry whose kernel thread is blocked on a stuck
+     * disk still accepts connections and then says nothing — which is a symptom
+     * {@code docs/operations.md} explicitly lists, and this client used to hang forever on exactly
+     * the case somebody would be reaching for it to diagnose. Generous rather than short, because
+     * a large upload and a replay over a long log are both legitimately slow.
+     */
+    private static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
+
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .build();
@@ -36,12 +47,14 @@ final class Cli {
     private final String token;
     private final String adminToken;
     private final boolean json;
+    private final Duration timeout;
 
-    private Cli(String base, String token, String adminToken, boolean json) {
+    private Cli(String base, String token, String adminToken, boolean json, Duration timeout) {
         this.base = base;
         this.token = token;
         this.adminToken = adminToken;
         this.json = json;
+        this.timeout = timeout;
     }
 
     static void main(String[] args) {
@@ -60,6 +73,7 @@ final class Cli {
         String token = System.getenv("CAIRN_TOKEN");
         String adminToken = System.getenv("CAIRN_ADMIN_TOKEN");
         boolean json = false;
+        Duration timeout = DEFAULT_TIMEOUT;
 
         List<String> rest = new ArrayList<>();
         for (String arg : args) {
@@ -69,6 +83,12 @@ final class Cli {
                 token = arg.substring("--token=".length());
             } else if (arg.startsWith("--admin-token=")) {
                 adminToken = arg.substring("--admin-token=".length());
+            } else if (arg.startsWith("--timeout=")) {
+                long seconds = Long.parseLong(arg.substring("--timeout=".length()));
+                if (seconds <= 0) {
+                    throw new IllegalArgumentException("--timeout must be positive: " + seconds);
+                }
+                timeout = Duration.ofSeconds(seconds);
             } else if (arg.equals("--json")) {
                 json = true;
             } else {
@@ -80,9 +100,17 @@ final class Cli {
             return rest.isEmpty() ? USAGE : 0;
         }
 
-        Cli cli = new Cli(base, token, adminToken, json);
+        Cli cli = new Cli(base, token, adminToken, json, timeout);
         try {
             return cli.run(rest);
+        } catch (java.net.http.HttpTimeoutException e) {
+            // Distinct from a refused connection, and worth saying so: the registry is up and not
+            // answering, which points at the kernel thread rather than at the network.
+            System.err.println("cairnctl: " + base + " accepted the request and did not answer"
+                    + " within " + cli.timeout.toSeconds() + "s. The registry is running but its"
+                    + " kernel thread is not responding — check disk I/O and free space, and see"
+                    + " docs/operations.md. Raise the wait with --timeout=<seconds>.");
+            return UNREACHABLE;
         } catch (IOException e) {
             System.err.println("cairnctl: cannot reach " + base + ": " + e.getMessage());
             return UNREACHABLE;
@@ -163,6 +191,7 @@ final class Cli {
             throw new IllegalArgumentException("not a file: " + file);
         }
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(base + "/v1/artifacts"))
+                .timeout(timeout)
                 .PUT(HttpRequest.BodyPublishers.ofFile(path))
                 .header("Content-Type", "application/octet-stream");
         authorize(request, false);
@@ -430,6 +459,7 @@ final class Cli {
     private Response send(String method, String path, String body, boolean admin)
             throws IOException, InterruptedException {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(base + path))
+                .timeout(timeout)
                 .method(method, body == null
                         ? HttpRequest.BodyPublishers.noBody()
                         : HttpRequest.BodyPublishers.ofString(body));
@@ -533,6 +563,7 @@ final class Cli {
         System.out.println("  --token=<secret>                  default $CAIRN_TOKEN");
         System.out.println("  --admin-token=<secret>            default $CAIRN_ADMIN_TOKEN");
         System.out.println("  --json                            print responses verbatim");
+        System.out.println("  --timeout=<seconds>               wait for a response (30)");
         System.out.println();
         System.out.println("exit 0 success, 1 refused, 2 bad usage, 3 unreachable");
     }

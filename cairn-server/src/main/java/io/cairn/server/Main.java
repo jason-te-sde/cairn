@@ -93,16 +93,29 @@ public final class Main {
             return;
         }
 
+        // Bind first, before anything opens a file. HttpServer.create binds immediately, so a
+        // port clash costs nothing and reports cleanly — it used to happen after recovery, which
+        // meant the log was opened, the engine started, and then main died with a raw
+        // BindException stack trace and an engine nobody closed.
+        HttpServer http;
+        try {
+            http = HttpServer.create(new InetSocketAddress(config.address(), config.port()), 64);
+        } catch (java.net.BindException e) {
+            System.err.println("cairnd: cannot bind " + config.address() + ":" + config.port()
+                    + " — " + e.getMessage() + ". Something is already listening there, or the"
+                    + " address does not belong to this host. Use --port=0 for an ephemeral port.");
+            System.exit(2);
+            return;
+        }
+
         Path data = config.dataDir();
         CommandLog log = new FileCommandLog(data.resolve("log"), config.durability());
         SnapshotStore snapshots = new FileSnapshotStore(data.resolve("snapshots"));
-        BlobStore blobs = new FileBlobStore(data.resolve("artifacts"));
+        BlobStore blobs = new FileBlobStore(data.resolve("artifacts"), config.maxArtifactBytes());
         Engine engine = new Engine(
                 config, log, snapshots, blobs,
                 new ServerSink(blobs, config.effectsLog()));
 
-        HttpServer http = HttpServer.create(
-                new InetSocketAddress(config.address(), config.port()), 64);
         http.createContext("/", new Api(engine, config));
         http.setExecutor(Executors.newFixedThreadPool(REQUEST_THREADS, runnable -> {
             Thread thread = new Thread(runnable, "cairn-http");

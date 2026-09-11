@@ -89,13 +89,33 @@ class ServerConfigTest {
     }
 
     @Test
+    void theArtifactCeilingIsConfigurableAndBounded() {
+        // 256 GiB with no way to lower it is a ceiling nobody chose, on a server that already
+        // admits it has no rate limiting.
+        assertEquals(1024, ServerConfig.parse(new String[] {"--max-artifact-bytes=1024"})
+                .maxArtifactBytes());
+        assertEquals(io.cairn.core.Limits.MAX_ARTIFACT_BYTES,
+                ServerConfig.parse(new String[0]).maxArtifactBytes());
+
+        assertThrows(IllegalStateException.class,
+                () -> ServerConfig.parse(new String[] {"--max-artifact-bytes=0"}).validate());
+        assertThrows(IllegalStateException.class,
+                () -> ServerConfig.parse(new String[] {"--max-artifact-bytes=-1"}).validate());
+        // Above the hard limit is refused too: the flag lowers the ceiling, it does not raise it.
+        assertThrows(IllegalStateException.class,
+                () -> ServerConfig.parse(new String[] {
+                    "--max-artifact-bytes=" + (io.cairn.core.Limits.MAX_ARTIFACT_BYTES + 1)
+                }).validate());
+    }
+
+    @Test
     void theHelpTextCoversEveryFlag() {
         // So a flag cannot be added without being documented.
         String help = String.join("\n", ServerConfig.help());
         for (String flag : new String[] {
             "--config", "--data-dir", "--address", "--port", "--token", "--admin-token",
             "--insecure", "--durability", "--snapshot-every", "--effects-log",
-            "--dispatch-every-millis"
+            "--dispatch-every-millis", "--max-artifact-bytes"
         }) {
             assertTrue(help.contains(flag), flag + " is not in the help text");
         }

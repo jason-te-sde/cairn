@@ -26,6 +26,13 @@ becomes something you have to mean.
 | `--snapshot-every` | commands between snapshots, 0 to disable (`1000`) |
 | `--effects-log` | append delivered effects as JSON lines |
 | `--dispatch-every-millis` | retry interval for a stalled consumer (`2000`) |
+| `--max-artifact-bytes` | largest artifact an upload may store (256 GiB) |
+
+**Set `--max-artifact-bytes`.** The default is a ceiling, not a policy: it is the largest number the
+registry can represent, not a number anybody chose. There is no rate limiting, so an authenticated
+client can otherwise fill the disk one upload at a time. An artifact over the limit is refused with
+**413** while it is streaming — the limit is checked against what arrived, not against a
+`Content-Length` the client supplied — and nothing is stored.
 
 An unknown flag is an error rather than a shrug, because a typo in a flag that silently does nothing
 is how a node ends up running without the setting somebody thought they had applied.
@@ -204,12 +211,28 @@ for a bulk import, and for benchmarks that are measuring something else.
 | `/readyz` hangs, `/healthz` answers | the kernel thread is blocked — almost always the disk | check I/O wait and free space. The command path fsyncs; a disk that has stopped acknowledging writes stops the registry. |
 | Everything is 401 | `--token` is set and the client is not sending it | `CAIRN_TOKEN`, or `--token=` |
 | `DELETE` and stage changes are 401, reads work | that is the design: they need `--admin-token` | `CAIRN_ADMIN_TOKEN` |
+| A history query returns 410 `history_unavailable` | the log below that index has been compacted | the body carries `earliest_available`; ask for that or later. This can also happen to an index that was valid moments ago, if a checkpoint released the prefix in between. |
+| An upload returns 413 `artifact_too_large` | over `--max-artifact-bytes` | the body carries `limit_bytes`. Nothing was stored. |
+| `cairnctl` reports "accepted the request and did not answer" | the registry is up and its kernel thread is not responding | the same cause as the `/readyz` row below — check disk I/O and free space. Raise the wait with `--timeout=<seconds>` if the registry is merely slow rather than stuck. |
 | Publishing returns 503 `collection_pending` | the artifact's bytes are being collected and cannot come back yet | wait for `cairn_effects_dispatched_through` to pass the sequence number in the message, then retry. If it is not advancing, the consumer is stuck — see the outbox alert. |
 | Publishing returns 409 `immutable_version` | that version exists with different content | publish a new version. This is working correctly. |
 | Publishing returns 422 `digest_mismatch` | the bytes did not hash to the promised digest | a truncated upload or a mangled proxy. Nothing was stored. Retry. |
 | Deleting returns 409 `has_descendants` | another live version declares this one as a parent | delete the descendant first, or archive this one instead |
 | `cairnctl verify` reports `MISMATCH` | the served state and the log disagree | **page somebody.** This should be impossible; the log is the truth, so restart to re-derive from it, and keep the data directory for analysis. |
 | Disk full | artifacts | `cairnctl fsck`, then look at what is referenced. The log and snapshots are megabytes. |
+
+## One thing that serializes with writes
+
+`cairnctl state --at=N`, `cairnctl verify` and `GET /v1/state` run **on the thread that owns the
+kernel**, because they replay the log and the log belongs to that thread. So a history query holds
+up the commands behind it: measured at **9.6 ms per call over a 4,000-record log** on the hardware
+in the README, scaling linearly with how much log there is above the newest snapshot.
+
+That is a consequence of the single-writer design rather than an oversight, and it is fine for what
+these are — operator commands, not a serving path. It is worth knowing before wiring `verify` into
+a health check that runs every second. `cairn_outbox_depth` and everything else on `/metrics` are
+*not* affected: those read a snapshot the owning thread republishes after each command, so a scrape
+never queues behind an fsync.
 
 ## What this does not do
 

@@ -11,8 +11,8 @@
     <img alt="CI" src="https://github.com/jason-te-sde/cairn/actions/workflows/ci.yml/badge.svg">
   </a>
   <img alt="Java 21" src="https://img.shields.io/badge/Java-21%2B-orange">
-  <img alt="tests" src="https://img.shields.io/badge/tests-528-brightgreen">
-  <img alt="coverage" src="https://img.shields.io/badge/coverage-87.0%25-brightgreen">
+  <img alt="tests" src="https://img.shields.io/badge/tests-537-brightgreen">
+  <img alt="coverage" src="https://img.shields.io/badge/coverage-86.8%25-brightgreen">
   <img alt="dependencies" src="https://img.shields.io/badge/runtime%20deps-1-brightgreen">
   <img alt="Maven Central" src="https://img.shields.io/badge/maven--central-pending-lightgrey">
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
@@ -326,9 +326,9 @@ Measured on an Apple M-series laptop, APFS, JDK 25. Every figure has the command
 
 | | |
 | --- | --- |
-| Tests | **528** (520 on every build; 8 benchmarks off by default) |
-| Line / branch coverage | **87.0% / 80.0%** |
-| Hand-written Java | 10,870 lines main, 6,302 lines test, 109 files |
+| Tests | **537** (529 on every build; 8 benchmarks off by default) |
+| Line / branch coverage | **86.8% / 80.0%** |
+| Hand-written Java | 11,186 lines main, 6,651 lines test, 112 files |
 | Runtime dependencies | **SLF4J.** `cairn-core` and `cairn-codec` have none at all |
 | Kernel throughput | **2,400,678 commands/s** |
 | Simulation | 14,402 steps/s, **113,685 invariant checks/s** |

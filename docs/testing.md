@@ -1,6 +1,6 @@
 # Testing
 
-528 tests. 520 run on every build; 8 are benchmarks, off by default. 87.0% line and 80.0% branch
+537 tests. 529 run on every build; 8 are benchmarks, off by default. 86.8% line and 80.0% branch
 coverage.
 
 Coverage is a smoke alarm, not a goal. The untested remainder is mostly `toString`, unreachable
