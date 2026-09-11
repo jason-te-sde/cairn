@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.jason-te-sde</groupId>
+    <artifactId>cairn-parent</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>cairn-store</artifactId>
+  <name>cairn-store</name>
+  <description>
+    Durability: a crash-recoverable append-only command log, snapshots, and a content-addressed
+    blob store that computes a digest while it writes rather than believing one it was handed.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.github.jason-te-sde</groupId>
+      <artifactId>cairn-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.jason-te-sde</groupId>
+      <artifactId>cairn-codec</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+    </dependency>
+  </dependencies>
+</project>
