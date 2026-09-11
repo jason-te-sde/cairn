@@ -352,6 +352,21 @@ class ApiTest {
     }
 
     @Test
+    void theStateRouteHandlesAwkwardQueries() throws Exception {
+        publish("fraud@1.0.0", upload("weights v1"));
+        long current = registry.engine().state().appliedIndex();
+
+        // The parameter need not be first.
+        assertEquals(1L, Json.parseObject(get("/v1/state?other=x&at=1").body()).get("at"));
+        // An index past the end clamps to what exists rather than failing.
+        assertEquals(current,
+                Json.parseObject(get("/v1/state?at=999999").body()).get("at"));
+        // And nonsense is a 400, not a 500.
+        assertEquals(400, get("/v1/state?at=banana").statusCode());
+        assertEquals(400, get("/v1/state?at=-1").statusCode());
+    }
+
+    @Test
     void theEffectsRouteShowsWhatIsOwed() throws Exception {
         publish("fraud@1.0.0", upload("weights v1"));
         Map<String, Object> effects = Json.parseObject(get("/v1/effects").body());
