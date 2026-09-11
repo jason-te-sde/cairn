@@ -7,7 +7,7 @@ Coverage is a smoke alarm, not a goal. The untested remainder is mostly `toStrin
 defensive branches, and `Main`'s flag handling; a number near 100% usually means somebody wrote
 tests for `toString`.
 
-## The five layers
+## The six layers
 
 New code lands in the cheapest layer that can catch its bugs.
 
@@ -18,6 +18,7 @@ New code lands in the cheapest layer that can catch its bugs.
 | **Differential** | `cairn-testkit`, `cairn-store` | two implementations of the same contract, required to agree |
 | **Simulation** | `cairn-testkit` | a whole registry from one seed, invariants after every step |
 | **Integration** | `cairn-server` | real sockets, real files, real restarts |
+| **Concurrency** | `cairn-server` | request threads on every read path while the owning thread writes |
 
 ## The twelve properties
 
@@ -193,6 +194,28 @@ sweep is 3.17 million invariant checks in about thirteen seconds.
 `-am` is not optional in those commands. Without it the reactor holds one module and no parent, and
 the enforcer's `reactorModuleConvergence` rule refuses to run — which is a confusing failure to hit
 while chasing a test, so it is worth knowing that it is the build and not the test.
+
+## The concurrency layer
+
+`ConcurrentReadSafetyTest` drives commands on the owning thread while request threads hammer
+everything a request may touch. It exists because the first version of the server got this wrong in
+two places, and neither was visible to any single-threaded test:
+
+- `GET /metrics` read the log's size directly, and threw `ClosedChannelException` when a checkpoint
+  closed a segment underneath it.
+- `GET /v1/state` ran the whole replay path off-thread, and threw
+  `ConcurrentModificationException` when a checkpoint rebuilt the segment list.
+
+`FileCommandLog` had always *said* it was single-threaded. Saying so did not help, so it now checks:
+it claims ownership on first use and refuses any other thread, by name. That turned the next
+occurrence from a rare corrupt read into an immediate, legible failure — and it immediately found a
+third instance, the engine recovering on the constructing thread and appending on another.
+
+The thresholds in that file differ per reader by an order of magnitude, deliberately: a metrics
+scrape is a few reads off a volatile snapshot, while a history query is a full replay that runs *on*
+the owning thread and queues behind every command. Calibrating both to the same number would make
+one test toothless and the other impossible. The first version used one number for everything —
+taken from the racy behaviour it was written to catch.
 
 ## What this suite does not cover
 
