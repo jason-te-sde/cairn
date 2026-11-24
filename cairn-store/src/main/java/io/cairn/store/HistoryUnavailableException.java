@@ -12,15 +12,16 @@ package io.cairn.store;
  * <p>It is also reachable by simply being unlucky: an index that was available when a client read
  * the current position can be compacted away before the follow-up request arrives. A concurrency
  * test found exactly that, which is why the answer names a number the caller can act on.
- *
- * @param requested the index that was asked for
- * @param earliestAvailable the lowest index that can still be reconstructed
  */
 public final class HistoryUnavailableException extends StoreException {
 
     private final long requested;
     private final long earliestAvailable;
 
+    /**
+     * @param requested the index that was asked for
+     * @param earliestAvailable the lowest index that can still be reconstructed
+     */
     public HistoryUnavailableException(long requested, long earliestAvailable) {
         super("cannot reconstruct index " + requested
                 + ": the log below it has been released, and the earliest index still available is "
