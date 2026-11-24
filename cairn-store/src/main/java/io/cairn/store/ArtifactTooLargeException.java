@@ -10,15 +10,16 @@ package io.cairn.store;
  *
  * <p>Detected while streaming rather than from a {@code Content-Length}, so it is what happened
  * rather than what the client claimed. The partial write is removed before this is thrown.
- *
- * @param written how many bytes had arrived when the limit was passed
- * @param limit the ceiling
  */
 public final class ArtifactTooLargeException extends StoreException {
 
     private final long written;
     private final long limit;
 
+    /**
+     * @param written how many bytes had arrived when the limit was passed
+     * @param limit the ceiling
+     */
     public ArtifactTooLargeException(long written, long limit) {
         super("artifact exceeds the " + limit + " byte limit; at least " + written
                 + " bytes were offered");
